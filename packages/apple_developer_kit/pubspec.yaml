@@ -3,8 +3,8 @@ description: >-
   Apple Developer tooling for Dart: GrandSlam/Anisette login, App Store Connect
   provisioning, in-process codesigning, and ADI (Provision) client.
 version: 1.0.0
-repository: https://github.com/arxdeus/xcross
-homepage: https://github.com/arxdeus/xcross/packages/apple_developer_kit
+repository: https://github.com/Tuyose/xcross-flutter-windows-linux
+homepage: https://github.com/Tuyose/xcross-flutter-windows-linux/tree/main/packages/apple_developer_kit
 topics:
   - apple
   - anisette

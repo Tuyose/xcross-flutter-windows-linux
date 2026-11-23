@@ -1,0 +1,53 @@
+name: Build or runtime report
+description: Report a reproducible Windows/Linux xcross problem
+title: "[bug] "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove passwords, tokens, 2FA codes, private keys, provisioning profiles and private paths.
+  - type: input
+    id: host
+    attributes:
+      label: Host and architecture
+      placeholder: Windows 11 x64 / Ubuntu 24.04 ARM64
+    validations:
+      required: true
+  - type: input
+    id: versions
+    attributes:
+      label: Flutter, Dart, Swift, LLVM and xcross versions
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Exact command
+      render: text
+    validations:
+      required: true
+  - type: textarea
+    id: error
+    attributes:
+      label: First real error and last log lines
+      description: Paste the first error plus the final relevant log section.
+      render: text
+    validations:
+      required: true
+  - type: dropdown
+    id: class
+    attributes:
+      label: Failure class
+      options:
+        - toolchain or doctor
+        - Flutter engine or AOT
+        - native assets
+        - SwiftPM or module cache
+        - bundle or IPA assembly
+        - signing or entitlement
+        - App Store Connect
+        - device runtime
+    validations:
+      required: true

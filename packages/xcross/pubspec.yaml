@@ -3,8 +3,8 @@ description: >-
   Build, run, and hot-reload Flutter iOS apps natively from Linux and Windows
   with official Swift and LLVM toolchains and no xtool runtime.
 version: 2.0.9
-repository: https://github.com/arxdeus/xcross
-homepage: https://github.com/arxdeus/xcross
+repository: https://github.com/Tuyose/xcross-flutter-windows-linux
+homepage: https://github.com/Tuyose/xcross-flutter-windows-linux
 topics:
   - ios
   - flutter

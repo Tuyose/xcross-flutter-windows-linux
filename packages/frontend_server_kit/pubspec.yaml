@@ -3,8 +3,8 @@ description: >-
   Drive a persistent frontend_server subprocess for incremental kernel
   compile, hot reload, and expression evaluation (including Flutter targets).
 version: 1.0.0
-repository: https://github.com/arxdeus/xcross
-homepage: https://github.com/arxdeus/xcross
+repository: https://github.com/Tuyose/xcross-flutter-windows-linux
+homepage: https://github.com/Tuyose/xcross-flutter-windows-linux
 topics:
   - dart
   - flutter

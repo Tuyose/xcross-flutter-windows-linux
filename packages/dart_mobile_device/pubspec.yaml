@@ -3,8 +3,8 @@ description: >-
   iOS device transport for Dart: pymobiledevice3 wrappers, RSD tunnels,
   port forwarding, and GDB remote debug proxy.
 version: 1.0.0
-repository: https://github.com/arxdeus/xcross
-homepage: https://github.com/arxdeus/xcross
+repository: https://github.com/Tuyose/xcross-flutter-windows-linux
+homepage: https://github.com/Tuyose/xcross-flutter-windows-linux
 topics:
   - ios
   - device
