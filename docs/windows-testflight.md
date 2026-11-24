@@ -44,6 +44,9 @@ The cross-platform executable is `xcross-testflight` (or
 PowerShell wrapper remains useful when a project wants a Windows-native entry
 point, but the Dart client is the preferred Windows/Linux implementation.
 
+For GitHub Actions runner labels, secret names, manual dispatch inputs and the
+queueing behavior, see [CI-SETUP.md](CI-SETUP.md).
+
 ## Pipeline stages
 
 ```mermaid

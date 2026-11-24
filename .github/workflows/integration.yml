@@ -28,9 +28,11 @@ env:
     76F44EF1BA6EEB5A65904E9500F042F588FADE49952778CE48F0374DAA934396
 
 concurrency:
-  # Keyed by event and commit so a new push queues alongside in-flight runs
-  # instead of cancelling them; /check comments are keyed by comment.
-  group: integration-${{ github.event_name }}-${{ github.event.comment.id || github.sha }}
+  # Serialize runs for the same branch/ref. A new push waits for the active
+  # build instead of starting a second full SwiftPM/IPA build or cancelling it.
+  # GitHub keeps one pending run per group; cancel-in-progress remains false so
+  # the active run always finishes.
+  group: integration-${{ github.repository }}-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
