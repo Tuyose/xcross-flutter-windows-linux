@@ -81,6 +81,14 @@ class WorkflowSecurityTests(unittest.TestCase):
                     cached = [body for _, _, body in steps(source) if "actions/cache" in body]
                     self.assertEqual(len(cached), len(caches))
                     for body in cached:
+                        if "key: flutter-swiftpm-" in body:
+                            paths = re.findall(
+                                r"(?m)^ {10}path: (.+)$", body,
+                            )
+                            self.assertEqual(len(paths), 1)
+                            self.assertRegex(paths[0], r"/xcross/swiftpm$")
+                            self.assertNotRegex(paths[0].lower(), r"darwin|sdk")
+                            continue
                         paths = re.findall(r"(?m)^ {12}(\S.*)$", body.split("path: |\n", 1)[1])
                         self.assertTrue(paths)
                         if "key: gradle-" in body:
