@@ -113,7 +113,7 @@ jobs:
             echo "::notice::$notice"
           else
             cache_key="xcross-darwin-$(printf '%s-%s' "$RUNNER_OS" "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')"
-            cache_count="$(gh cache list --key "$cache_key" --limit 1 --json id --jq 'length')"
+            cache_count="$(gh cache list --repo "$GITHUB_REPOSITORY" --key "$cache_key" --limit 1 --json id --jq 'length')"
             if [[ "$cache_count" == "1" ]]; then
               echo "available=true" >> "$GITHUB_OUTPUT"
             else
@@ -1556,7 +1556,7 @@ jobs:
             echo "::notice::$notice"
           else
             cache_key="xcross-darwin-$(printf '%s-%s' "$RUNNER_OS" "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')"
-            cache_count="$(gh cache list --key "$cache_key" --limit 1 --json id --jq 'length')"
+            cache_count="$(gh cache list --repo "$GITHUB_REPOSITORY" --key "$cache_key" --limit 1 --json id --jq 'length')"
             if [[ "$cache_count" == "1" ]]; then
               echo "available=true" >> "$GITHUB_OUTPUT"
             else
