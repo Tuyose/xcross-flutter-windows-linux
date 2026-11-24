@@ -545,19 +545,21 @@ jobs:
             ${{ runner.os == 'Windows' && '~/AppData/Local' || '~/.cache' }}/xcross/open-apple-macros/*/OpenAppleMacrosServer*
           key: open-apple-macros-${{ runner.os }}-${{ runner.arch }}-swift-${{ env.SWIFT_VERSION }}-${{ hashFiles('.gitmodules', 'packages/xcross/lib/src/shared/flutter/swiftpm/open_apple_macros.dart') }}
 
-      # SwiftPM is the dominant phase of plugin-heavy Flutter builds. Keep its
-      # stable xcross workspace between CI runs so an unchanged plugin graph
-      # can use the same fingerprinted output, while the toolchain and source
-      # key still prevent unrelated caches from being mixed.
+      # SwiftPM is the dominant phase of plugin-heavy Flutter builds. Keep only
+      # the fingerprint and per-workspace build state between CI runs. The
+      # shared binary-artifact store is intentionally excluded: it is large,
+      # already content-addressed, and must not evict the Darwin SDK cache.
       - name: Restore Flutter SwiftPM build cache
         id: flutter-swiftpm
         if: steps.darwin.outputs.available == 'true'
         uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
-          path: ${{ runner.os == 'Windows' && '~/AppData/Local' || '~/.cache' }}/xcross/swiftpm
-          key: flutter-swiftpm-${{ runner.os }}-${{ runner.arch }}-flutter-${{ env.FLUTTER_VERSION }}-swift-${{ env.SWIFT_VERSION }}-llvm-${{ env.LLVM_VERSION }}-${{ hashFiles('.gitmodules', 'packages/xcross/pubspec.lock', 'packages/xcross/lib/src/shared/flutter/**', 'examples/flutter_example/pubspec.lock') }}
+          path: |
+            ${{ runner.os == 'Windows' && '~/AppData/Local' || '~/.cache' }}/xcross/swiftpm/*/scratch
+            ${{ runner.os == 'Windows' && '~/AppData/Local' || '~/.cache' }}/xcross/swiftpm/*/plugins/.xcross-build-fingerprint
+          key: flutter-swiftpm-v2-${{ runner.os }}-${{ runner.arch }}-flutter-${{ env.FLUTTER_VERSION }}-swift-${{ env.SWIFT_VERSION }}-llvm-${{ env.LLVM_VERSION }}-${{ hashFiles('.gitmodules', 'packages/xcross/pubspec.lock', 'packages/xcross/lib/src/shared/flutter/**', 'examples/flutter_example/pubspec.lock') }}
           restore-keys: |
-            flutter-swiftpm-${{ runner.os }}-${{ runner.arch }}-flutter-${{ env.FLUTTER_VERSION }}-swift-${{ env.SWIFT_VERSION }}-llvm-${{ env.LLVM_VERSION }}-
+            flutter-swiftpm-v2-${{ runner.os }}-${{ runner.arch }}-flutter-${{ env.FLUTTER_VERSION }}-swift-${{ env.SWIFT_VERSION }}-llvm-${{ env.LLVM_VERSION }}-
 
       - name: Add entitlements fixture to Flutter example
         if: steps.darwin.outputs.available == 'true'
@@ -769,8 +771,10 @@ jobs:
         if: ${{ !cancelled() && steps.darwin.outputs.available == 'true' && steps.flutter-swiftpm.outputs.cache-hit != 'true' }}
         uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
-          path: ${{ runner.os == 'Windows' && '~/AppData/Local' || '~/.cache' }}/xcross/swiftpm
-          key: flutter-swiftpm-${{ runner.os }}-${{ runner.arch }}-flutter-${{ env.FLUTTER_VERSION }}-swift-${{ env.SWIFT_VERSION }}-llvm-${{ env.LLVM_VERSION }}-${{ hashFiles('.gitmodules', 'packages/xcross/pubspec.lock', 'packages/xcross/lib/src/shared/flutter/**', 'examples/flutter_example/pubspec.lock') }}
+          path: |
+            ${{ runner.os == 'Windows' && '~/AppData/Local' || '~/.cache' }}/xcross/swiftpm/*/scratch
+            ${{ runner.os == 'Windows' && '~/AppData/Local' || '~/.cache' }}/xcross/swiftpm/*/plugins/.xcross-build-fingerprint
+          key: flutter-swiftpm-v2-${{ runner.os }}-${{ runner.arch }}-flutter-${{ env.FLUTTER_VERSION }}-swift-${{ env.SWIFT_VERSION }}-llvm-${{ env.LLVM_VERSION }}-${{ hashFiles('.gitmodules', 'packages/xcross/pubspec.lock', 'packages/xcross/lib/src/shared/flutter/**', 'examples/flutter_example/pubspec.lock') }}
 
       - name: Upload Flutter example release IPA
         if: steps.darwin.outputs.available == 'true'
