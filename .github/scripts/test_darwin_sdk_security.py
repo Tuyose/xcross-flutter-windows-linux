@@ -147,9 +147,20 @@ class WorkflowSecurityTests(unittest.TestCase):
                 for fork, expected in (("true", "false"), ("false", "true")):
                     with tempfile.TemporaryDirectory(dir=os.environ.get("JCODE_SCRATCH_DIR")) as directory:
                         output = Path(directory) / "output"
+                        fake_gh = Path(directory) / "gh"
+                        fake_gh.write_text("#!/bin/bash\nprintf '%s\\n' '1'\n")
+                        fake_gh.chmod(0o755)
                         result = subprocess.run(
                             ["bash", "-c", script(gate)], check=True, capture_output=True, text=True,
-                            env={**os.environ, "IS_FORK_PR": fork, "GITHUB_OUTPUT": str(output)},
+                            env={
+                                **os.environ,
+                                "IS_FORK_PR": fork,
+                                "GITHUB_OUTPUT": str(output),
+                                "GITHUB_REPOSITORY": "owner/repository",
+                                # The extracted script runs under Bash/Git Bash,
+                                # whose PATH separator is ':' even on Windows.
+                                "PATH": f"{directory}:{os.environ['PATH']}",
+                            },
                         )
                         self.assertEqual(output.read_text(), f"available={expected}\n")
                         if fork == "true":
@@ -318,11 +329,10 @@ class WorkflowSecurityTests(unittest.TestCase):
                 source = (WORKFLOWS / name).read_text()
                 triggers = re.search(r"(?ms)^on:\n(.*?)^\S", source).group(1)
                 self.assertIn("  push:\n    branches:\n      - main\n", triggers)
-                self.assertIn("  pull_request:\n    types: [opened, reopened]\n", triggers)
+                self.assertIn("  pull_request:\n    types: [opened, reopened, synchronize]\n", triggers)
                 self.assertIn("  issue_comment:\n    types: [created]\n", triggers)
                 self.assertRegex(triggers, r"(?m)^  workflow_dispatch:\s*$")
                 self.assertNotIn("inputs", triggers)
-                self.assertNotIn("synchronize", triggers)
                 gate = job(source, "gate")
                 self.assertIn("startsWith(github.event.comment.body, '/check')", gate)
                 self.assertIn("uses: ./.github/actions/integration-gate", gate)
