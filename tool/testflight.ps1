@@ -345,6 +345,39 @@ function Get-IncludedBuildProcessingState {
   return $null
 }
 
+function Wait-AscBuildUpload {
+  param(
+    [Parameter(Mandatory = $true)][string]$UploadId,
+    [Parameter(Mandatory = $true)][string]$Jwt,
+    [Parameter(Mandatory = $true)][int]$PollSeconds,
+    [Parameter(Mandatory = $true)][int]$TimeoutMinutes
+  )
+
+  $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
+  do {
+    Start-Sleep -Seconds $PollSeconds
+    $status = Invoke-AscApi `
+      -Method GET `
+      -Path "/buildUploads/$UploadId?include=build" `
+      -Jwt $Jwt
+    $uploadState = Get-BuildUploadState -Response $status
+    $processingState = Get-IncludedBuildProcessingState -Response $status
+    Write-Host "Status: upload=$uploadState build=$processingState"
+
+    if ($uploadState -eq 'FAILED' -or $processingState -eq 'INVALID') {
+      throw 'App Store Connect build processing failed. Ayrıntı için App Store Connect Build Uploads ekranını açın.'
+    }
+    if ($processingState -eq 'VALID' -or
+        ($uploadState -eq 'COMPLETE' -and !$processingState)) {
+      Write-Host 'TestFlight processing: VALID'
+      return
+    }
+    if ((Get-Date) -ge $deadline) {
+      throw "Build processing $TimeoutMinutes dakika içinde tamamlanmadı. Upload ID: $UploadId"
+    }
+  } while ($true)
+}
+
 if (!$Build -and [string]::IsNullOrWhiteSpace($IpaPath)) {
   throw 'En az bir işlem seçin: -Build veya -IpaPath.'
 }
@@ -452,17 +485,37 @@ try {
     -Path "/apps/$appId/buildUploads?filter%5BcfBundleVersion%5D=$buildNumberQuery&filter%5BcfBundleShortVersionString%5D=$shortVersionQuery&limit=20" `
     -Jwt $jwt
   $existingUploads = @($existing.data | Where-Object {
-    $stateValue = $_.attributes.state
-    $state = if ($stateValue -is [string]) { [string]$stateValue } else { [string]$stateValue.state }
-    $state -eq 'AWAITING_UPLOAD' -and
-      [string]$_.attributes.cfBundleVersion -eq [string]$metadata.BuildVersion -and
+    [string]$_.attributes.cfBundleVersion -eq [string]$metadata.BuildVersion -and
       [string]$_.attributes.cfBundleShortVersionString -eq [string]$metadata.ShortVersion
   })
   if ($existingUploads.Count -gt 1) {
-    throw 'Aynı version için birden fazla AWAITING_UPLOAD BuildUpload var.'
+    throw 'Aynı version için birden fazla BuildUpload var; önce App Store Connect durumunu temizleyin.'
   }
   if ($existingUploads.Count -eq 1) {
     $uploadId = [string]$existingUploads[0].id
+    $stateValue = $existingUploads[0].attributes.state
+    $existingState = if ($stateValue -is [string]) { [string]$stateValue } else { [string]$stateValue.state }
+    if ($existingState -ne 'AWAITING_UPLOAD') {
+      $status = Invoke-AscApi `
+        -Method GET `
+        -Path "/buildUploads/$uploadId?include=build" `
+        -Jwt $jwt
+      $uploadState = Get-BuildUploadState -Response $status
+      $processingState = Get-IncludedBuildProcessingState -Response $status
+      if ($uploadState -eq 'FAILED' -or $processingState -eq 'INVALID') {
+        throw 'App Store Connect build processing failed. Yeni build number kullanın.'
+      }
+      Write-Host "Existing build upload reused: $uploadId (upload=$uploadState build=$processingState)"
+      if ($WaitForProcessing) {
+        Wait-AscBuildUpload `
+          -UploadId $uploadId `
+          -Jwt $jwt `
+          -PollSeconds $PollSeconds `
+          -TimeoutMinutes $TimeoutMinutes
+      }
+      Write-Host 'TESTFLIGHT PIPELINE PASS (existing build)'
+      return
+    }
     Write-Host "Existing build upload reservation resumed: $uploadId"
   } else {
     $buildUploadReservation = Invoke-AscApi `
@@ -515,29 +568,11 @@ try {
   Write-Host 'Binary upload committed to App Store Connect.'
 
   if ($WaitForProcessing) {
-    $deadline = (Get-Date).AddMinutes($TimeoutMinutes)
-    do {
-      Start-Sleep -Seconds $PollSeconds
-      $status = Invoke-AscApi `
-        -Method GET `
-        -Path "/buildUploads/$uploadId?include=build" `
-        -Jwt $jwt
-      $uploadState = Get-BuildUploadState -Response $status
-      $processingState = Get-IncludedBuildProcessingState -Response $status
-      Write-Host "Status: upload=$uploadState build=$processingState"
-
-      if ($uploadState -eq 'FAILED' -or $processingState -eq 'INVALID') {
-        throw 'App Store Connect build processing failed. Ayrıntı için App Store Connect Build Uploads ekranını açın.'
-      }
-      if ($processingState -eq 'VALID' -or
-          ($uploadState -eq 'COMPLETE' -and !$processingState)) {
-        Write-Host 'TestFlight processing: VALID'
-        break
-      }
-      if ((Get-Date) -ge $deadline) {
-        throw "Build processing $TimeoutMinutes dakika içinde tamamlanmadı. Upload ID: $uploadId"
-      }
-    } while ($true)
+    Wait-AscBuildUpload `
+      -UploadId $uploadId `
+      -Jwt $jwt `
+      -PollSeconds $PollSeconds `
+      -TimeoutMinutes $TimeoutMinutes
   }
 
   Write-Host 'TESTFLIGHT PIPELINE PASS'

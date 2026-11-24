@@ -130,6 +130,131 @@ void main() {
       expect(requests, contains('PATCH /v1/buildUploadFiles/file-id'));
     },
   );
+
+  test('matches only the exact version and build reservation', () async {
+    final key = CryptoUtils.generateEcKeyPair();
+    final temporary = await Directory.systemTemp.createTemp(
+      'xcross-build-upload-match-',
+    );
+    addTearDown(() => temporary.delete(recursive: true));
+    final keyFile = File('${temporary.path}/AuthKey_TEST.p8');
+    await keyFile.writeAsString(
+      CryptoUtils.encodeEcPrivateKeyToPem(key.privateKey as ECPrivateKey),
+    );
+    final credentials = AscCredentials(
+      hostServices: testHostServices,
+      issuerId: 'issuer',
+      keyId: 'TEST',
+      privateKeyPath: keyFile.path,
+    );
+    final client = MockClient((request) async {
+      expect(request.url.path, '/v1/apps/app/buildUploads');
+      return _jsonResponse({
+        'data': [
+          {
+            'type': 'buildUploads',
+            'id': 'wrong',
+            'attributes': {
+              'state': 'AWAITING_UPLOAD',
+              'cfBundleVersion': '8',
+              'cfBundleShortVersionString': '1.2.3',
+            },
+          },
+          {
+            'type': 'buildUploads',
+            'id': 'right',
+            'attributes': {
+              'state': 'COMPLETE',
+              'cfBundleVersion': '7',
+              'cfBundleShortVersionString': '1.2.3',
+            },
+          },
+        ],
+      });
+    });
+    final uploader = AscBuildUploadClient(credentials, httpClient: client);
+    addTearDown(uploader.close);
+
+    final match = await uploader.findExistingBuildUpload(
+      appId: 'app',
+      shortVersion: '1.2.3',
+      buildVersion: '7',
+    );
+
+    expect(match?.id, 'right');
+    expect(match?.state, 'COMPLETE');
+  });
+
+  test('does not upload a build that is already processing', () async {
+    final temporary = await Directory.systemTemp.createTemp(
+      'xcross-build-upload-reuse-',
+    );
+    addTearDown(() => temporary.delete(recursive: true));
+    final ipa = File('${temporary.path}/sample.ipa')
+      ..writeAsStringSync('already-uploaded');
+    final key = CryptoUtils.generateEcKeyPair();
+    final keyFile = File('${temporary.path}/AuthKey_TEST.p8');
+    await keyFile.writeAsString(
+      CryptoUtils.encodeEcPrivateKeyToPem(key.privateKey as ECPrivateKey),
+    );
+    final credentials = AscCredentials(
+      hostServices: testHostServices,
+      issuerId: 'issuer',
+      keyId: 'TEST',
+      privateKeyPath: keyFile.path,
+    );
+    final requests = <String>[];
+    final client = MockClient.streaming((request, body) async {
+      requests.add('${request.method} ${request.url.path}');
+      await body.toBytes();
+      if (request.url.path == '/v1/apps/app/buildUploads') {
+        return _jsonResponse({
+          'data': [
+            {
+              'type': 'buildUploads',
+              'id': 'existing-upload',
+              'attributes': {
+                'state': 'COMPLETE',
+                'cfBundleVersion': '7',
+                'cfBundleShortVersionString': '1.2.3',
+              },
+            },
+          ],
+        });
+      }
+      if (request.url.path == '/v1/buildUploads/existing-upload') {
+        return _jsonResponse({
+          'data': {
+            'type': 'buildUploads',
+            'id': 'existing-upload',
+            'attributes': {'state': 'COMPLETE'},
+          },
+          'included': [
+            {
+              'type': 'builds',
+              'id': 'build',
+              'attributes': {'processingState': 'PROCESSING'},
+            },
+          ],
+        });
+      }
+      fail('Unexpected request: ${request.method} ${request.url}');
+    });
+    final uploader = AscBuildUploadClient(credentials, httpClient: client);
+    addTearDown(uploader.close);
+
+    final result = await uploader.uploadIpa(
+      ipa: ipa,
+      appId: 'app',
+      shortVersion: '1.2.3',
+      buildVersion: '7',
+    );
+
+    expect(result.reusedExisting, isTrue);
+    expect(result.buildUploadId, 'existing-upload');
+    expect(requests, isNot(contains('POST /v1/buildUploads')));
+    expect(requests, isNot(contains('POST /v1/buildUploadFiles')));
+  });
 }
 
 http.StreamedResponse _jsonResponse(

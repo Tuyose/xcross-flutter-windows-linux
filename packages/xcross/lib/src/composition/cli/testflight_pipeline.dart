@@ -138,10 +138,17 @@ Future<void> runTestflight(List<String> arguments) async {
         shortVersion: metadata.shortVersion,
         buildVersion: metadata.buildVersion,
       );
-      stdout.writeln(
-        'Upload committed: ${result.buildUploadId} '
-        '(${result.operationCount} operation, MD5 ${result.md5})',
-      );
+      if (result.reusedExisting) {
+        stdout.writeln(
+          'Existing upload reused: ${result.buildUploadId}; '
+          'no duplicate binary upload was started.',
+        );
+      } else {
+        stdout.writeln(
+          'Upload committed: ${result.buildUploadId} '
+          '(${result.operationCount} operation, MD5 ${result.md5})',
+        );
+      }
       if (options['wait'] as bool) {
         await _waitForProcessing(
           uploader,

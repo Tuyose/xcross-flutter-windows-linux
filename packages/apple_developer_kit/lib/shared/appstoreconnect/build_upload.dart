@@ -58,12 +58,26 @@ final class AscBuildUploadResult {
     required this.fileId,
     required this.operationCount,
     required this.md5,
+    this.reusedExisting = false,
   });
 
   final String buildUploadId;
   final String fileId;
   final int operationCount;
   final String md5;
+
+  /// True when App Store Connect already had this version/build and no bytes
+  /// were uploaded by this invocation.
+  final bool reusedExisting;
+}
+
+/// A reservation returned by App Store Connect for a version/build pair.
+@immutable
+final class AscExistingBuildUpload {
+  const AscExistingBuildUpload({required this.id, required this.state});
+
+  final String id;
+  final String? state;
 }
 
 /// Build Upload API client shared by Windows and Linux distribution flows.
@@ -138,11 +152,36 @@ final class AscBuildUploadClient {
     final fileSize = await ipa.length();
     if (fileSize <= 0) throw ArgumentError('IPA is empty: ${ipa.path}');
 
-    final buildUploadId = await _findOrCreateBuildUpload(
+    final existing = await findExistingBuildUpload(
       appId: appId,
       shortVersion: shortVersion,
       buildVersion: buildVersion,
     );
+    if (existing != null && existing.state != 'AWAITING_UPLOAD') {
+      final existingStatus = await status(existing.id);
+      if (existingStatus.isFailed) {
+        throw StateError(
+          'App Store Connect already has a failed upload for '
+          '$shortVersion ($buildVersion). Increment CFBundleVersion before '
+          'retrying; do not submit the same build forever.',
+        );
+      }
+      return AscBuildUploadResult(
+        buildUploadId: existing.id,
+        fileId: '',
+        operationCount: 0,
+        md5: '',
+        reusedExisting: true,
+      );
+    }
+
+    final buildUploadId =
+        existing?.id ??
+        await _createBuildUpload(
+          appId: appId,
+          shortVersion: shortVersion,
+          buildVersion: buildVersion,
+        );
     final reservation = await _post(
       '/buildUploadFiles',
       _buildUploadFilePayload(
@@ -198,6 +237,43 @@ final class AscBuildUploadClient {
     );
   }
 
+  /// Finds the existing reservation for an exact version/build pair.
+  ///
+  /// The endpoint can return nearby records, so the version fields are
+  /// checked again locally before a reservation is reused. This is the read
+  /// side of the idempotency guarantee used by both the Dart and PowerShell
+  /// TestFlight entry points.
+  Future<AscExistingBuildUpload?> findExistingBuildUpload({
+    required String appId,
+    required String shortVersion,
+    required String buildVersion,
+  }) async {
+    final existing = await _get(
+      '/apps/$appId/buildUploads'
+      '?filter%5BcfBundleVersion%5D=${Uri.encodeQueryComponent(buildVersion)}'
+      '&filter%5BcfBundleShortVersionString%5D='
+      '${Uri.encodeQueryComponent(shortVersion)}&limit=20',
+    );
+    final matches = [
+      for (final item in _list(existing['data']))
+        if (_matchesVersion(
+          item,
+          shortVersion: shortVersion,
+          buildVersion: buildVersion,
+        ))
+          AscExistingBuildUpload(
+            id: item['id'] as String,
+            state: _stateOf(item['attributes']),
+          ),
+    ];
+    if (matches.length > 1) {
+      throw const FormatException(
+        'More than one build upload reservation matches this version.',
+      );
+    }
+    return matches.isEmpty ? null : matches.single;
+  }
+
   /// Reads the current upload/processing states for a reservation.
   Future<AscBuildUploadStatus> status(String buildUploadId) async {
     final response = await _get('/buildUploads/$buildUploadId?include=build');
@@ -227,44 +303,41 @@ final class AscBuildUploadClient {
     _http.close();
   }
 
-  Future<String> _findOrCreateBuildUpload({
+  Future<String> _createBuildUpload({
     required String appId,
     required String shortVersion,
     required String buildVersion,
   }) async {
-    final existing = await _get(
-      '/apps/$appId/buildUploads'
-      '?filter%5BcfBundleVersion%5D=${Uri.encodeQueryComponent(buildVersion)}'
-      '&filter%5BcfBundleShortVersionString%5D='
-      '${Uri.encodeQueryComponent(shortVersion)}&limit=20',
-    );
-    final awaiting = [
-      for (final item in _list(existing['data']))
-        if (_stateOf(item['attributes']) == 'AWAITING_UPLOAD') item,
-    ];
-    if (awaiting.length > 1) {
-      throw const FormatException(
-        'More than one AWAITING_UPLOAD reservation matches this version.',
-      );
-    }
-    if (awaiting.length == 1) return awaiting.single['id'] as String;
-
-    final created = await _post('/buildUploads', {
-      'data': {
-        'type': 'buildUploads',
-        'attributes': {
-          'cfBundleShortVersionString': shortVersion,
-          'cfBundleVersion': buildVersion,
-          'platform': 'IOS',
-        },
-        'relationships': {
-          'app': {
-            'data': {'type': 'apps', 'id': appId},
+    try {
+      final created = await _post('/buildUploads', {
+        'data': {
+          'type': 'buildUploads',
+          'attributes': {
+            'cfBundleShortVersionString': shortVersion,
+            'cfBundleVersion': buildVersion,
+            'platform': 'IOS',
+          },
+          'relationships': {
+            'app': {
+              'data': {'type': 'apps', 'id': appId},
+            },
           },
         },
-      },
-    });
-    return _data(created)['id'] as String;
+      });
+      return _data(created)['id'] as String;
+    } on AppleApiError catch (error) {
+      // Another runner may have created the reservation between the initial
+      // GET and this POST. Re-read it once instead of surfacing a misleading
+      // duplicate error or submitting the IPA twice.
+      if (error.statusCode != 409) rethrow;
+      final existing = await findExistingBuildUpload(
+        appId: appId,
+        shortVersion: shortVersion,
+        buildVersion: buildVersion,
+      );
+      if (existing?.state == 'AWAITING_UPLOAD') return existing!.id;
+      rethrow;
+    }
   }
 
   Map<String, dynamic> _buildUploadFilePayload({
@@ -412,6 +485,17 @@ final class AscBuildUploadClient {
     if (state is String) return state;
     if (state is Map) return state['state'] as String?;
     return null;
+  }
+
+  static bool _matchesVersion(
+    Map<String, dynamic> item, {
+    required String shortVersion,
+    required String buildVersion,
+  }) {
+    final attributes = item['attributes'];
+    if (attributes is! Map) return false;
+    return attributes['cfBundleVersion']?.toString() == buildVersion &&
+        attributes['cfBundleShortVersionString']?.toString() == shortVersion;
   }
 
   static String? _firstErrorDetail(Object? decoded) {

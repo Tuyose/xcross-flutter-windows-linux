@@ -8,7 +8,9 @@ Reviewed implementation: `2362e4f` (2026-10-03 UTC).
 - Added Flutter and Compose ARM64 simulator builds: `xcross flutter build --target-platform simulator --debug` and `xcross compose build --target-platform simulator`.
 - Added native Xcode.app SDK import, separate device/simulator outputs and caches, and headless macOS ARM64 CI with readiness markers, screenshots, crash checks and scoped cleanup.
 - Fixed packaged xcrun delegation, native compiler SDK selection, Java shim discovery, Flutter workspace identity/migration, incomplete SDK publication and ADI POSIX compatibility.
-- Removed plaintext Darwin SDK Actions caching. Trusted cross-host CI now uses `DARWIN_ARTIFACTBUNDLE_URL`.
+- Removed plaintext Darwin SDK Actions caching. Cross-host CI restores a
+  per-host Darwin artifact cache; the cache must be seeded by the manual
+  `Warm Darwin SDK cache` workflow with an authenticated Xcode `.xip` URL.
 
 ## Verified
 
