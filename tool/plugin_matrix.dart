@@ -1,5 +1,3 @@
-// ignore_for_file: missing_internal
-
 import 'dart:convert';
 import 'dart:io';
 
@@ -54,15 +52,13 @@ Future<void> main(List<String> arguments) async {
     if (!_allowedStatuses.contains(status)) {
       throw FormatException('Entry $index has unsupported status "$status".');
     }
-    rows.add(
-      MatrixRow(
-        name: name,
-        kind: kind,
-        status: status,
-        hosts: hosts.join(', '),
-        target: target,
-      ),
-    );
+    rows.add((
+      name: name,
+      kind: kind,
+      status: status,
+      hosts: hosts.join(', '),
+      target: target,
+    ));
   }
 
   if (markdown) {
@@ -127,18 +123,10 @@ String _markdown(List<MatrixRow> rows) {
 
 String _cell(String value) => value.replaceAll('|', r'\|');
 
-final class MatrixRow {
-  const MatrixRow({
-    required this.name,
-    required this.kind,
-    required this.status,
-    required this.hosts,
-    required this.target,
-  });
-
-  final String name;
-  final String kind;
-  final String status;
-  final String hosts;
-  final String target;
-}
+typedef MatrixRow = ({
+  String name,
+  String kind,
+  String status,
+  String hosts,
+  String target,
+});
