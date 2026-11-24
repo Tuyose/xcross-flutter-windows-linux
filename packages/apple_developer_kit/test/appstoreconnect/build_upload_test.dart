@@ -147,8 +147,9 @@ void main() {
       keyId: 'TEST',
       privateKeyPath: keyFile.path,
     );
-    final client = MockClient((request) async {
+    final client = MockClient.streaming((request, body) async {
       expect(request.url.path, '/v1/apps/app/buildUploads');
+      await body.toBytes();
       return _jsonResponse({
         'data': [
           {

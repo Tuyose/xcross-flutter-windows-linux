@@ -27,7 +27,8 @@ Future<void> main(List<String> arguments) async {
   if (decoded is! Map) {
     throw const FormatException('Matrix root must be an object.');
   }
-  final entries = decoded['entries'];
+  final root = decoded.cast<String, Object?>();
+  final entries = root['entries'];
   if (entries is! List || entries.isEmpty) {
     throw const FormatException(
       'Matrix must contain a non-empty entries list.',
@@ -36,13 +37,16 @@ Future<void> main(List<String> arguments) async {
 
   final rows = <MatrixRow>[];
   for (var index = 0; index < entries.length; index++) {
-    final raw = entries[index];
-    if (raw is! Map) throw FormatException('Entry $index is not an object.');
+    final rawValue = entries[index];
+    if (rawValue is! Map) {
+      throw FormatException('Entry $index is not an object.');
+    }
+    final raw = rawValue.cast<String, Object?>();
     final name = _requiredString(raw, 'name', index);
     final kind = _requiredString(raw, 'kind', index);
     final status = _requiredString(raw, 'status', index);
-    final evidence = _requiredString(raw, 'evidence', index);
-    final notes = _requiredString(raw, 'notes', index);
+    _requiredString(raw, 'evidence', index);
+    _requiredString(raw, 'notes', index);
     final hosts = _requiredStrings(raw, 'hosts', index);
     final target = _requiredString(raw, 'target', index);
     if (!_allowedStatuses.contains(status)) {
@@ -55,8 +59,6 @@ Future<void> main(List<String> arguments) async {
         status: status,
         hosts: hosts.join(', '),
         target: target,
-        evidence: evidence,
-        notes: notes,
       ),
     );
   }
@@ -78,7 +80,7 @@ String? _option(List<String> arguments, String name) {
   return null;
 }
 
-String _requiredString(Map raw, String key, int index) {
+String _requiredString(Map<String, Object?> raw, String key, int index) {
   final value = raw[key];
   if (value is! String || value.trim().isEmpty) {
     throw FormatException('Entry $index is missing non-empty $key.');
@@ -86,7 +88,7 @@ String _requiredString(Map raw, String key, int index) {
   return value.trim();
 }
 
-List<String> _requiredStrings(Map raw, String key, int index) {
+List<String> _requiredStrings(Map<String, Object?> raw, String key, int index) {
   final value = raw[key];
   if (value is! List || value.isEmpty || value.any((item) => item is! String)) {
     throw FormatException('Entry $index is missing a non-empty $key list.');
@@ -123,6 +125,7 @@ String _markdown(List<MatrixRow> rows) {
 
 String _cell(String value) => value.replaceAll('|', r'\|');
 
+// ignore: missing_internal
 final class MatrixRow {
   const MatrixRow({
     required this.name,
@@ -130,8 +133,6 @@ final class MatrixRow {
     required this.status,
     required this.hosts,
     required this.target,
-    required this.evidence,
-    required this.notes,
   });
 
   final String name;
@@ -139,6 +140,4 @@ final class MatrixRow {
   final String status;
   final String hosts;
   final String target;
-  final String evidence;
-  final String notes;
 }
