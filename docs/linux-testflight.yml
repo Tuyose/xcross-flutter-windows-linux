@@ -8,9 +8,9 @@ name: Linux TestFlight
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
+
+# Keep TestFlight manual by default. Add a push trigger only in a private
+# project after deciding that every commit should consume an Apple upload.
 
 permissions:
   contents: read

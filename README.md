@@ -17,6 +17,7 @@ SwiftPM plugins, Darwin SDK setup, CI validation, signing, and TestFlight handof
 
 [Quick start](#quick-start) · [What was achieved](#what-was-achieved) ·
 [AI guide](docs/AI-QUICKSTART.md) · [TestFlight guide](docs/windows-testflight.md) ·
+[CI setup](docs/CI-SETUP.md) · [Release checklist](docs/RELEASE-CHECKLIST.md) ·
 [Plugin matrix](docs/plugin-compatibility.md) ·
 [Troubleshooting](#troubleshooting) · [Contributing](CONTRIBUTING.md)
 
@@ -141,15 +142,22 @@ flowchart LR
 ### 1. Clone and inspect
 
 ```powershell
-git clone https://github.com/Tuyose/xcross-flutter-windows-linux.git
+git clone --recurse-submodules https://github.com/Tuyose/xcross-flutter-windows-linux.git
 cd xcross-flutter-windows-linux
 ```
 
 On Linux:
 
 ```bash
-git clone https://github.com/Tuyose/xcross-flutter-windows-linux.git
+git clone --recurse-submodules https://github.com/Tuyose/xcross-flutter-windows-linux.git
 cd xcross-flutter-windows-linux
+```
+
+If the repository was cloned without submodules, initialize the public example
+projects before running the integration checks:
+
+```text
+git submodule update --init --checkout examples third_party/OpenAppleMacros
 ```
 
 ### 2. Install the host prerequisites
@@ -207,6 +215,24 @@ the upstream command reference. For distribution, use the signing and
 TestFlight guide below. Developer Mode and device pairing are separate from
 App Store Connect distribution signing.
 
+### 6. Reproduce the public integration example
+
+The repository's `examples` submodule contains the Flutter project used by the
+Windows/Linux integration matrix. It is a build fixture, not an Apple signing
+identity and not a replacement for testing your own application:
+
+```powershell
+git submodule update --init --checkout examples third_party/OpenAppleMacros
+Set-Location examples/flutter_example
+xcross flutter build --release --ipa
+```
+
+The same path is exercised automatically by the public [Integration Tests]
+workflow. A successful workflow proves the cross-build and bundle checks; it
+does not prove that an arbitrary plugin or app feature works on an iPhone.
+
+[Integration Tests]: https://github.com/Tuyose/xcross-flutter-windows-linux/actions/workflows/integration.yml
+
 ## Windows TestFlight guide
 
 Read [docs/windows-testflight.md](docs/windows-testflight.md) for the complete
@@ -251,6 +277,8 @@ For a self-hosted runner, the repository includes a manual reference workflow
 at [`.github/workflows/testflight-self-hosted.yml`](.github/workflows/testflight-self-hosted.yml).
 It waits behind an active upload with `cancel-in-progress: false` and expects
 the App Store Connect key through repository or environment secrets.
+
+For the complete fork/runner/secret setup, see [CI setup](docs/CI-SETUP.md).
 
 ## AI-assisted usage
 
@@ -301,6 +329,8 @@ skipped or not tested rather than silently presented as a pass.
 
 - Keep `cancel-in-progress: false` when a build queue must preserve the active
   build and process the next commit afterward.
+- Key the concurrency group by repository, workflow and branch/ref; a group
+  keyed by commit allows expensive builds to run in parallel.
 - Cache the Darwin SDK and SwiftPM products with a key that includes the
   toolchain, SDK and architecture.
 - Use one SwiftPM job while diagnosing module-cache races; increase parallelism
