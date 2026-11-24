@@ -312,21 +312,12 @@ jobs:
           swiftc -typecheck "$RUNNER_TEMP/swift-probe.swift"
 
       - name: Install Linux requirements
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && steps.darwin.outputs.available == 'true'
         shell: bash
-        env:
-          DARWIN_AVAILABLE: ${{ steps.darwin.outputs.available }}
         run: |
           set -euo pipefail
           flutter config --no-analytics
-          # The iOS engine is only needed when the Darwin SDK cache is
-          # available. Avoid a large network download on cache-gated runs;
-          # those runs intentionally stop before every Darwin-dependent build.
-          if [[ "$DARWIN_AVAILABLE" == "true" ]]; then
-            flutter precache --ios
-          else
-            echo "::notice::Skipping Flutter iOS engine precache because the Darwin SDK cache is unavailable."
-          fi
+          flutter precache --ios
           dart pub get
           (cd packages/xcross && dart run tool/build_xcross.dart)
           cp -r packages/xcross/build/cli/*/bundle "$RUNNER_TEMP/xcross-bundle"
