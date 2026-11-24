@@ -1,3 +1,5 @@
+// ignore_for_file: missing_internal
+
 import 'dart:convert';
 import 'dart:io';
 
@@ -125,7 +127,6 @@ String _markdown(List<MatrixRow> rows) {
 
 String _cell(String value) => value.replaceAll('|', r'\|');
 
-// ignore: missing_internal
 final class MatrixRow {
   const MatrixRow({
     required this.name,
