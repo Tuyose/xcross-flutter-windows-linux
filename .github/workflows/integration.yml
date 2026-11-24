@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 env:
   FLUTTER_VERSION: 3.47.2
@@ -85,6 +86,7 @@ jobs:
     if: needs.gate.outputs.run == 'true'
     permissions:
       contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -99,6 +101,7 @@ jobs:
         shell: bash
         env:
           IS_FORK_PR: ${{ needs.gate.outputs.trusted != 'true' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [[ "$IS_FORK_PR" == "true" ]]; then
@@ -109,7 +112,14 @@ jobs:
             notice="$notice branch to this repository."
             echo "::notice::$notice"
           else
-            echo "available=true" >> "$GITHUB_OUTPUT"
+            cache_key="xcross-darwin-$(printf '%s-%s' "$RUNNER_OS" "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')"
+            cache_count="$(gh cache list --key "$cache_key" --limit 1 --json id --jq 'length')"
+            if [[ "$cache_count" == "1" ]]; then
+              echo "available=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "available=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Darwin SDK cache $cache_key is not available; Darwin-dependent integration steps are NOT TESTED. Run Warm Darwin SDK cache with an authenticated Xcode .xip URL."
+            fi
           fi
 
       - name: Checkout
@@ -1518,6 +1528,7 @@ jobs:
     if: needs.gate.outputs.run == 'true'
     permissions:
       contents: read
+      actions: read
     strategy:
       fail-fast: false
       matrix:
@@ -1533,6 +1544,7 @@ jobs:
         shell: bash
         env:
           IS_FORK_PR: ${{ needs.gate.outputs.trusted != 'true' }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           if [[ "$IS_FORK_PR" == "true" ]]; then
@@ -1543,7 +1555,14 @@ jobs:
             notice="$notice branch to this repository."
             echo "::notice::$notice"
           else
-            echo "available=true" >> "$GITHUB_OUTPUT"
+            cache_key="xcross-darwin-$(printf '%s-%s' "$RUNNER_OS" "$RUNNER_ARCH" | tr '[:upper:]' '[:lower:]')"
+            cache_count="$(gh cache list --key "$cache_key" --limit 1 --json id --jq 'length')"
+            if [[ "$cache_count" == "1" ]]; then
+              echo "available=true" >> "$GITHUB_OUTPUT"
+            else
+              echo "available=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Darwin SDK cache $cache_key is not available; Darwin-dependent integration steps are NOT TESTED. Run Warm Darwin SDK cache with an authenticated Xcode .xip URL."
+            fi
           fi
 
       - name: Checkout
