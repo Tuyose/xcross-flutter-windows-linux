@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:meta/meta.dart';
+
 const _allowedStatuses = <String>{
   'proven',
   'proven-with-override',
@@ -123,6 +125,7 @@ String _markdown(List<MatrixRow> rows) {
 
 String _cell(String value) => value.replaceAll('|', r'\|');
 
+@internal
 typedef MatrixRow = ({
   String name,
   String kind,
