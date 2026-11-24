@@ -58,13 +58,37 @@ final class FlutterPacker<T extends PlatformHostInterface> {
     options.validate(
       supportsPrecompiledModes: runtime.policy.supportsPrecompiledModes,
     );
-    final context = await _resolve.resolve(request);
+    final context = await _measurePhase(
+      'flutter.resolve',
+      () => _resolve.resolve(request),
+    );
     if (!identical(context.request, request)) {
       throw ArgumentError('Flutter resolver must retain the original request');
     }
-    final compiled = await _compile(context).compile();
-    final linked = await _link(context).link(compiled);
-    final assembled = await _assemble(context).assemble(linked);
+    final compiled = await _measurePhase(
+      'flutter.compile',
+      () => _compile(context).compile(),
+    );
+    final linked = await _measurePhase(
+      'flutter.link',
+      () => _link(context).link(compiled),
+    );
+    final assembled = await _measurePhase(
+      'flutter.assemble',
+      () => _assemble(context).assemble(linked),
+    );
     return (appPath: assembled, dartDefines: context.dartDefines);
+  }
+
+  Future<R> _measurePhase<R>(String label, Future<R> Function() body) async {
+    final watch = Stopwatch()..start();
+    try {
+      return await body();
+    } finally {
+      watch.stop();
+      runtime.runner.log.logTrace(
+        '[xcross-perf] $label ${watch.elapsedMilliseconds}ms',
+      );
+    }
   }
 }

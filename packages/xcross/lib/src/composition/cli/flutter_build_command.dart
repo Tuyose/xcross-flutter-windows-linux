@@ -212,8 +212,26 @@ final class FlutterBuildCommand<T extends PlatformHostInterface>
     }
 
     final finalPath = options.ipa
-        ? await IpaPackager(host: runtime.host).package(result.appPath)
+        ? await _measureIpaPackaging(
+            runtime,
+            () => IpaPackager(host: runtime.host).package(result.appPath),
+          )
         : result.appPath;
     runtime.log.logDone('Wrote $finalPath');
+  }
+
+  Future<String> _measureIpaPackaging(
+    XcrossRuntime<T> runtime,
+    Future<String> Function() body,
+  ) async {
+    final watch = Stopwatch()..start();
+    try {
+      return await body();
+    } finally {
+      watch.stop();
+      runtime.log.logTrace(
+        '[xcross-perf] flutter.ipa.package ${watch.elapsedMilliseconds}ms',
+      );
+    }
   }
 }
