@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       xcode_xip_url:
-        description: Direct download URL of an Xcode .xip.
+        description: Authenticated direct download URL of an Xcode .xip; an HTML login page is not valid.
         required: true
         type: string
       source_ref:
@@ -20,6 +20,12 @@ on:
 
 permissions:
   contents: read
+
+# Warming the same SDK concurrently wastes disk and can race while replacing
+# the cache. Queue a later request instead of cancelling the active one.
+concurrency:
+  group: warm-darwin-sdk-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   FLUTTER_VERSION: 3.47.2
@@ -433,7 +439,11 @@ jobs:
             --user-agent curl/8.5.0 \
             --output "$xip" "$XCODE_XIP_URL"
           ls -l "$xip"
-          test "$(head -c 4 "$xip")" = "xar!"
+          if [ "$(head -c 4 "$xip")" != "xar!" ]; then
+            echo "::error::The Xcode URL returned a non-XIP response. Apple download URLs often require an authenticated, short-lived session; do not use the public product page URL."
+            file "$xip" || true
+            exit 1
+          fi
           echo "XCODE_XIP=$xip" >> "$GITHUB_ENV"
 
       - name: Install Darwin SDK with xcross

@@ -1,0 +1,77 @@
+{
+  "schemaVersion": 1,
+  "project": "xcross-flutter-windows-linux",
+  "updated": "2026-11-24",
+  "statuses": [
+    "proven",
+    "proven-with-override",
+    "needs-validation",
+    "not-tested",
+    "runtime-risk"
+  ],
+  "entries": [
+    {
+      "name": "Flutter 3.44.9 iOS AOT",
+      "kind": "toolchain",
+      "status": "proven",
+      "hosts": ["windows-x64"],
+      "target": "arm64-apple-ios",
+      "evidence": "Nofpad Windows lab: Dart kernel, assets, AOT, native assets and IPA completed.",
+      "notes": "Use the Flutter release that contains the matching iOS gen_snapshot; do not silently fall back to the system Flutter."
+    },
+    {
+      "name": "Flutter Linux host path",
+      "kind": "toolchain",
+      "status": "proven",
+      "hosts": ["linux-x64", "linux-arm64"],
+      "target": "arm64-apple-ios",
+      "evidence": "Linux host integration matrix in CI.",
+      "notes": "A Darwin SDK cache is required for the host/target combination."
+    },
+    {
+      "name": "audio_waveforms",
+      "kind": "flutter-plugin",
+      "status": "proven-with-override",
+      "hosts": ["windows-x64"],
+      "target": "arm64-apple-ios",
+      "evidence": "Nofpad lab override under packages/ios_spm_overrides; target compiled with --jobs 1.",
+      "notes": "The override imports Flutter in native Swift files. Recheck when changing plugin versions."
+    },
+    {
+      "name": "permission_handler_apple",
+      "kind": "flutter-plugin",
+      "status": "proven-with-override",
+      "hosts": ["windows-x64"],
+      "target": "arm64-apple-ios",
+      "evidence": "Nofpad lab override; Objective-C public header and implementation imports were made explicit.",
+      "notes": "Provisioning and entitlement behavior still belongs to the consuming app."
+    },
+    {
+      "name": "cloud_firestore",
+      "kind": "flutter-plugin",
+      "status": "proven-with-override",
+      "hosts": ["windows-x64"],
+      "target": "arm64-apple-ios",
+      "evidence": "Nofpad lab override; FirebaseFirestoreInternal was imported before FirebaseFirestore in affected Objective-C files.",
+      "notes": "This is compile evidence, not a claim that every Firebase feature works on a device."
+    },
+    {
+      "name": "Embedded Widget extension",
+      "kind": "app-extension",
+      "status": "proven-with-override",
+      "hosts": ["windows-x64"],
+      "target": "arm64-apple-ios",
+      "evidence": "Nofpad App Store build carried and signed nofpadWidgets.appex with its own profile.",
+      "notes": "The host and extension must use matching Team ID, Bundle ID, App Group and entitlements."
+    },
+    {
+      "name": "MLKit and native binary frameworks",
+      "kind": "native-framework",
+      "status": "runtime-risk",
+      "hosts": ["windows-x64"],
+      "target": "arm64-apple-ios",
+      "evidence": "Nofpad build was accepted after a linker workaround that excluded MLKit frameworks and used dynamic lookup.",
+      "notes": "Apple acceptance does not prove runtime symbol availability. Test camera, OCR and text recognition on a real iPhone before release."
+    }
+  ]
+}

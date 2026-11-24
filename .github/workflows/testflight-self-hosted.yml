@@ -1,0 +1,164 @@
+name: Self-hosted TestFlight
+
+# This workflow is intentionally manual. It is a ready-to-copy reference for
+# a Flutter application that owns a self-hosted Windows or Linux runner. The
+# public repository does not require such a runner to validate its source.
+on:
+  workflow_dispatch:
+    inputs:
+      host:
+        description: Host runner label
+        required: true
+        default: Windows
+        type: choice
+        options:
+          - Windows
+          - Linux
+      project_path:
+        description: Flutter project path on the self-hosted runner
+        required: true
+        default: .
+        type: string
+      ipa_path:
+        description: Existing signed IPA, relative to project_path; leave empty when building
+        required: false
+        default: ''
+        type: string
+      build:
+        description: Build a fresh IPA with xcross
+        required: true
+        default: true
+        type: boolean
+      upload:
+        description: Upload through App Store Connect Build Upload API
+        required: true
+        default: true
+        type: boolean
+      wait:
+        description: Wait until App Store Connect reports VALID or failure
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+# A later commit waits for the active build/upload. It does not cancel it.
+concurrency:
+  group: testflight-${{ github.repository }}-${{ inputs.host }}
+  cancel-in-progress: false
+
+env:
+  XCROSS_ASC_ISSUER_ID: ${{ secrets.XCROSS_ASC_ISSUER_ID }}
+  XCROSS_ASC_KEY_ID: ${{ secrets.XCROSS_ASC_KEY_ID }}
+  XCROSS_ASC_APP_ID: ${{ secrets.XCROSS_ASC_APP_ID }}
+  XCROSS_ASC_PRIVATE_KEY_CONTENT: ${{ secrets.XCROSS_ASC_PRIVATE_KEY_CONTENT }}
+
+jobs:
+  windows:
+    if: ${{ inputs.host == 'Windows' }}
+    runs-on: [self-hosted, Windows, xcross-ios]
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare App Store Connect key
+        if: ${{ inputs.upload }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ([string]::IsNullOrWhiteSpace($env:XCROSS_ASC_PRIVATE_KEY_CONTENT)) {
+            throw 'XCROSS_ASC_PRIVATE_KEY_CONTENT secret is missing'
+          }
+          $keyPath = Join-Path $env:RUNNER_TEMP 'xcross-asc-auth-key.p8'
+          [IO.File]::WriteAllText($keyPath, $env:XCROSS_ASC_PRIVATE_KEY_CONTENT)
+          "XCROSS_ASC_PRIVATE_KEY=$keyPath" | Out-File $env:GITHUB_ENV -Encoding utf8 -Append
+
+      - name: Build, upload and wait
+        if: ${{ inputs.build && inputs.upload && inputs.wait }}
+        shell: pwsh
+        run: |
+          & xcross-testflight --project '${{ inputs.project_path }}' --build --upload --wait
+
+      - name: Build and upload without waiting
+        if: ${{ inputs.build && inputs.upload && !inputs.wait }}
+        shell: pwsh
+        run: |
+          & xcross-testflight --project '${{ inputs.project_path }}' --build --upload
+
+      - name: Build only
+        if: ${{ inputs.build && !inputs.upload }}
+        shell: pwsh
+        run: |
+          & xcross-testflight --project '${{ inputs.project_path }}' --build
+
+      - name: Upload existing IPA and wait
+        if: ${{ !inputs.build && inputs.upload && inputs.wait }}
+        shell: pwsh
+        run: |
+          & xcross-testflight --project '${{ inputs.project_path }}' --ipa '${{ inputs.ipa_path }}' --upload --wait
+
+      - name: Upload existing IPA without waiting
+        if: ${{ !inputs.build && inputs.upload && !inputs.wait }}
+        shell: pwsh
+        run: |
+          & xcross-testflight --project '${{ inputs.project_path }}' --ipa '${{ inputs.ipa_path }}' --upload
+
+      - name: Remove temporary private key
+        if: always()
+        shell: pwsh
+        run: |
+          Remove-Item -LiteralPath $env:XCROSS_ASC_PRIVATE_KEY -Force -ErrorAction SilentlyContinue
+
+  linux:
+    if: ${{ inputs.host == 'Linux' }}
+    runs-on: [self-hosted, Linux, xcross-ios]
+    timeout-minutes: 180
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Prepare App Store Connect key
+        if: ${{ inputs.upload }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$XCROSS_ASC_PRIVATE_KEY_CONTENT"
+          umask 077
+          printf '%s' "$XCROSS_ASC_PRIVATE_KEY_CONTENT" > "$RUNNER_TEMP/xcross-asc-auth-key.p8"
+          echo "XCROSS_ASC_PRIVATE_KEY=$RUNNER_TEMP/xcross-asc-auth-key.p8" >> "$GITHUB_ENV"
+
+      - name: Build, upload and wait
+        if: ${{ inputs.build && inputs.upload && inputs.wait }}
+        shell: bash
+        run: xcross-testflight --project '${{ inputs.project_path }}' --build --upload --wait
+
+      - name: Build and upload without waiting
+        if: ${{ inputs.build && inputs.upload && !inputs.wait }}
+        shell: bash
+        run: xcross-testflight --project '${{ inputs.project_path }}' --build --upload
+
+      - name: Build only
+        if: ${{ inputs.build && !inputs.upload }}
+        shell: bash
+        run: xcross-testflight --project '${{ inputs.project_path }}' --build
+
+      - name: Upload existing IPA and wait
+        if: ${{ !inputs.build && inputs.upload && inputs.wait }}
+        shell: bash
+        run: xcross-testflight --project '${{ inputs.project_path }}' --ipa '${{ inputs.ipa_path }}' --upload --wait
+
+      - name: Upload existing IPA without waiting
+        if: ${{ !inputs.build && inputs.upload && !inputs.wait }}
+        shell: bash
+        run: xcross-testflight --project '${{ inputs.project_path }}' --ipa '${{ inputs.ipa_path }}' --upload
+
+      - name: Remove temporary private key
+        if: always()
+        shell: bash
+        run: rm -f -- "${XCROSS_ASC_PRIVATE_KEY:-$RUNNER_TEMP/xcross-asc-auth-key.p8}"

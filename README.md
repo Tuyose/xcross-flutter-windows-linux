@@ -17,6 +17,7 @@ SwiftPM plugins, Darwin SDK setup, CI validation, signing, and TestFlight handof
 
 [Quick start](#quick-start) · [What was achieved](#what-was-achieved) ·
 [AI guide](docs/AI-QUICKSTART.md) · [TestFlight guide](docs/windows-testflight.md) ·
+[Plugin matrix](docs/plugin-compatibility.md) ·
 [Troubleshooting](#troubleshooting) · [Contributing](CONTRIBUTING.md)
 
 </div>
@@ -43,14 +44,18 @@ checks in order, and return useful evidence instead of a vague “it failed”.
 | Area | Result | Evidence |
 | --- | --- | --- |
 | Flutter on Windows | Release AOT, assets, native assets, app bundle and unsigned IPA | Windows integration workflow |
-| Flutter on Linux | Same cross-build path validated on x64 and ARM64 hosts | Linux integration workflow |
+| Flutter on Linux | Cross-build path and host matrix are defined for x64 and ARM64 | Linux integration workflow; Darwin cache required |
 | SwiftPM plugins | Plugin graphs compile against the assembled Darwin SDK | SwiftPM integration jobs |
 | Darwin SDK | Xcode SDK extraction/cache path works without running Xcode | `darwin_sdk_kit` and cache workflow |
-| Cross-platform CI | Architecture, unit, integration and release jobs pass on Windows/Linux | GitHub Actions |
+| Cross-platform CI | Architecture and unit gates pass; integration is cache-gated | GitHub Actions |
 | Windows ARM64 | Native host and Flutter build path validated | `windows-11-arm` jobs |
 | Signing | Main app and embedded `.appex` extensions can be signed with separate profiles | Nofpad case study |
 | TestFlight handoff | App Store Connect Build Upload API path reaches `VALID` | Nofpad build `1.0.1 (1795343628)` |
 | Repeatability | Existing build uploads are detected instead of producing a misleading duplicate failure | idempotent TestFlight pipeline |
+
+The full plugin evidence and its limits are tracked in the
+[compatibility matrix](docs/plugin-compatibility.md). It deliberately marks
+MLKit as a runtime risk because a successful link is not a device test.
 
 ### The Nofpad case study
 
@@ -234,6 +239,18 @@ Xcode.xip or a private Darwin SDK cache
 Use environment variables or a local secret manager. For an extension, create
 and configure a separate Bundle ID and provisioning profile; removing the
 extension only hides a signing problem and is not a valid fix.
+
+The reusable Dart entry point is also available after installing xcross:
+
+```text
+xcross-testflight --project . --build --upload --wait
+xcross-testflight --project . --ipa build/xcross-ios/MyApp.ipa --upload
+```
+
+For a self-hosted runner, the repository includes a manual reference workflow
+at [`.github/workflows/testflight-self-hosted.yml`](.github/workflows/testflight-self-hosted.yml).
+It waits behind an active upload with `cancel-in-progress: false` and expects
+the App Store Connect key through repository or environment secrets.
 
 ## AI-assisted usage
 

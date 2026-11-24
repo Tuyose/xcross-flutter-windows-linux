@@ -39,6 +39,11 @@ project/
    └─ widget.mobileprovision
 ```
 
+The cross-platform executable is `xcross-testflight` (or
+`dart run packages/xcross/bin/testflight.dart` from this repository). The
+PowerShell wrapper remains useful when a project wants a Windows-native entry
+point, but the Dart client is the preferred Windows/Linux implementation.
+
 ## Pipeline stages
 
 ```mermaid
@@ -66,7 +71,8 @@ The wrapper should implement these steps:
 2. Resolve the App Store Connect app ID from the Bundle ID, or accept it as a
    secret-free configuration value.
 3. Check whether the same build number is already `VALID` or `PROCESSING`.
-4. If it is already `VALID`, report success instead of creating a duplicate.
+4. If it is already `VALID` or active, report/reuse it instead of creating a
+   duplicate binary upload.
 5. Otherwise call `POST /v1/buildUploads`.
 6. Reserve the file using `POST /v1/buildUploadFiles`.
 7. Upload every URL/range from `uploadOperations`.
@@ -84,6 +90,11 @@ The bundle version must be higher than the previously uploaded version.
 
 For a genuinely new upload, increment `CFBundleVersion`, rebuild and repeat the
 pipeline. Do not silently reuse a production build number.
+
+The client also handles the race where two runners pass the initial check at
+the same time: a `409` reservation response is re-read once and the existing
+`AWAITING_UPLOAD` reservation is resumed. The local `.dart_tool` lock and the
+workflow `concurrency` group cover the normal same-project case.
 
 ## Extension signing checklist
 
