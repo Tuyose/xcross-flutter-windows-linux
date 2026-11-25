@@ -174,6 +174,32 @@ final class GeneratedPluginsPackage<T extends PlatformHostInterface> {
   ///                         `IosEngineCache.flutterXcframework`).
   /// [workspace] owns the stable generated-package and scratch directories
   /// reused between builds.
+  Future<bool> _cachedResourceSourcesExist(String targetDebugDir) async {
+    final manifest = runtime.artifactFileSystem.file(
+      p.join(p.dirname(p.dirname(targetDebugDir)), 'debug.yaml'),
+    );
+    if (!manifest.existsSync()) return false;
+    final copies;
+    try {
+      copies = parseSwiftPmResourceCopies(
+        await manifest.readAsString(),
+        p.context,
+      );
+    } on Object {
+      return false;
+    }
+    for (final resource in copies.values.expand((resources) => resources)) {
+      if (runtime.artifactFileSystem.file(resource.source).existsSync() ||
+          runtime.artifactFileSystem
+              .directory(resource.source)
+              .existsSync()) {
+        continue;
+      }
+      return false;
+    }
+    return true;
+  }
+
   Future<GeneratedPluginsBuildResult?> build({
     required String projectRoot,
     required SwiftPmWorkspace workspace,
@@ -237,12 +263,25 @@ final class GeneratedPluginsPackage<T extends PlatformHostInterface> {
           fingerprintFile.existsSync() &&
           await fingerprintFile.readAsString() == fingerprint;
       if (fingerprintMatches && pluginsDylib.existsSync()) {
-        runtime.runner.log.logTrace('reusing unchanged SwiftPM plugin build');
-        final reused = await runtime.assembly.discoverAndRewriteDylibs(
-          targetDebugDir,
-          pluginIdentities: pluginIdentities,
+        // The CI cache persists SwiftPM's scratch tree and fingerprint, but
+        // intentionally does not persist the staged plugin sources. A
+        // matching fingerprint must not reuse a debug.yaml whose resource
+        // inputs point at a missing Packages/ tree: the final bundle copier
+        // needs those sources to reproduce Xcode's processed resources
+        // (notably .xib -> .nib).
+        if (await _cachedResourceSourcesExist(targetDebugDir)) {
+          runtime.runner.log.logTrace(
+            'reusing unchanged SwiftPM plugin build',
+          );
+          final reused = await runtime.assembly.discoverAndRewriteDylibs(
+            targetDebugDir,
+            pluginIdentities: pluginIdentities,
+          );
+          return reused;
+        }
+        runtime.runner.log.logTrace(
+          'invalidating cached SwiftPM plugin build: resource sources missing',
         );
-        return reused;
       }
       final targetDirectory = runtime.artifactFileSystem.directory(
         targetDebugDir,
