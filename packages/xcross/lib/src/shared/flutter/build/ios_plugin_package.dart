@@ -179,7 +179,7 @@ final class GeneratedPluginsPackage<T extends PlatformHostInterface> {
       p.join(p.dirname(p.dirname(targetDebugDir)), 'debug.yaml'),
     );
     if (!manifest.existsSync()) return false;
-    final copies;
+    late final Map<String, List<SwiftPmBundleResource>> copies;
     try {
       copies = parseSwiftPmResourceCopies(
         await manifest.readAsString(),
@@ -188,14 +188,16 @@ final class GeneratedPluginsPackage<T extends PlatformHostInterface> {
     } on Object {
       return false;
     }
-    for (final resource in copies.values.expand((resources) => resources)) {
-      if (runtime.artifactFileSystem.file(resource.source).existsSync() ||
-          runtime.artifactFileSystem
-              .directory(resource.source)
-              .existsSync()) {
-        continue;
+    for (final resources in copies.values) {
+      for (final resource in resources) {
+        if (runtime.artifactFileSystem.file(resource.source).existsSync() ||
+            runtime.artifactFileSystem
+                .directory(resource.source)
+                .existsSync()) {
+          continue;
+        }
+        return false;
       }
-      return false;
     }
     return true;
   }
